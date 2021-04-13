@@ -1,0 +1,99 @@
+def random_sample_circles2(sample_size, image_shape):
+    res = []
+    res_circles = []
+    number_of_circles = 500
+    for i in range(sample_size):
+        circles = []
+        img = np.ones(shape=image_shape)*255
+        for j in range(number_of_circles):
+            x, y, color, size = random_square(image_shape)
+            circles+= [x,y,color,size]
+            for a in range(size):
+                for b in range(size):
+                    if (x + a) < image_shape[0] and (y + b) < image_shape[1] and (a-size/2)**2+(b-size/2)**2<=size:
+                        for rgb in range(3):
+                            img[x + a, y + b,rgb] = img[x + a, y + b,rgb]*0.5 + color[rgb]*0.5
+        res.append(img)
+        res_circles+=circles
+    return res,res_circles
+
+
+
+def crossover2(parents,ref):
+    image_shape = parents[0].shape
+    choices = len(parents)
+    img = np.empty(shape=image_shape)
+    #parent = random.randint(0, choices - 1)
+    for x in range(image_shape[0]):
+        for y in range(image_shape[1]):
+            #if y%30==0:
+            #    parent = random.randint(0, choices - 1)
+            # Kamil's way
+            old_norm =100000
+            for p in parents:
+                norm = 0
+                for rgb in range(image_shape[2]):
+                    norm += abs(p[x, y, rgb] - ref[x, y, rgb]) ** 2
+                if norm<old_norm:
+                    img[x,y] = p[x,y]
+                    old_norm = norm
+            #img[x, y] = parents[parent][x, y]
+            #for rgb in range(image_shape[2]):
+                # Option 1: Gaussian random variable
+                #img[x, y, rgb] *= max(min(np.random.normal(loc=0.5, scale=0.5),1),0)
+
+                # Option 2: Mutation with a probability
+                '''mutation_rate= 0.001
+                mutation = random.uniform(0,1)
+                if mutation <= mutation_rate:
+                    img[x,y,rgb] = int(random.randint(0, 255))'''
+
+    '''mutation_rate = 0.001
+    mutation = random.uniform(0, 1)
+    if mutation <= mutation_rate:
+        x, y, color, size = random_square(image_shape)
+        for a in range(size):
+            for b in range(size):
+                if (x + a) < image_shape[0] and (y + b) < image_shape[1]:
+                    img[x + a, y + b] = img[x + a, y + b] + color'''
+    mutation_rate = 0.8
+    mutation = random.uniform(0, 1)
+    if mutation <= mutation_rate:
+        x, y, color, size = random_square(image_shape)
+        for a in range(size):
+            for b in range(size):
+                if (x + a) < image_shape[0] and (y + b) < image_shape[1] and (a - size / 2) ** 2 + (
+                        b - size / 2) ** 2 <= size:
+                    for rgb in range(3):
+                        img[x + a, y + b, rgb] = img[x + a, y + b, rgb] * 0.5 + color[rgb] * 0.5
+    return img
+
+
+def random_sample(sample_size, image_shape):
+    res = []
+    for i in range(sample_size):
+        img = np.empty(shape=image_shape)
+        for x in range(image_shape[0]):
+            for y in range(image_shape[1]):
+                for rgb in range(image_shape[2]):
+                    img[x][y][rgb] = int(random.randint(0, 255))  # todo extend the color depth
+        # show_image(img)
+        res.append(img)
+    return res
+
+
+
+
+def random_sample_squares(sample_size, image_shape):
+    res = []
+    number_of_squares = 100
+    for i in range(sample_size):
+        img = np.zeros(shape=image_shape)
+        for j in range(number_of_squares):
+            x,y,color,size = random_square(image_shape)
+            for a in range(size):
+                for b in range(size):
+                    if (x+a)<image_shape[0] and (y+b)<image_shape[1]:
+                        img[x+a,y+b] = img[x+a,y+b] + color
+        res.append(img)
+    return res
