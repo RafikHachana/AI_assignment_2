@@ -97,3 +97,151 @@ def random_sample_squares(sample_size, image_shape):
                         img[x+a,y+b] = img[x+a,y+b] + color
         res.append(img)
     return res
+
+
+@jit
+def random_sample_circles(sample_size, image_shape):
+    res = []
+    number_of_circles = 500
+    for i in range(sample_size):
+        circles = []
+        for j in range(number_of_circles):
+            # x, y, color, size = random_square(image_shape)
+            circles += [random_square(image_shape)]
+        res.append(Individual(circles, image_shape))
+    return res
+
+
+# @jit
+def survivors(generation, ref):
+    survival_rate = 0.2
+    number_of_survivors = int(len(generation) * survival_rate)
+    res = sorted(generation,
+                 key=lambda x: fitness_function(ref, x.image)
+                 # '''get_image_difference(ref, x)+0.01*fitness_function(downscale_image(ref,16),downscale_image(x,16))'''
+                 )[:number_of_survivors]
+    print("Found survivors")
+    return res
+
+
+@jit
+def new_generation(size, old):
+    res = []
+    for i in range(size):
+        res.append(crossover(old))
+    res.append(old[0])
+    print("Made generation")
+    return res
+
+
+
+global img_height
+global img_width
+
+
+#@jitclass([('circles',types.list)])
+class Individual:
+    def __init__(self, circles: list, shape: tuple):
+        self.shape = shape
+        self.circles = []
+        self.image = np.ones(shape=self.shape) * 128
+        self.apply_circles(circles)
+
+    def add_circle(self, c: tuple):
+        self.circles.append(c)
+        x = c[0]
+        y = c[1]
+        color = c[2]
+        size = c[3]
+        # print(color)
+        sub_img = self.image[x - size // 2:x + size // 2, y - size // 2:y + size // 2]
+
+        white_rect = cv2.circle(sub_img.astype('uint8'), (size // 2, size // 2), size // 2, color, -1)
+        res = cv2.addWeighted(sub_img.astype('uint8'), 1-BRUSH_OPACITY, white_rect, BRUSH_OPACITY, 0)
+        # show_image(res)
+
+        # Putting the image back to its position
+        self.image[x - size // 2:x + size // 2, y - size // 2:y + size // 2] = res
+        '''for a in range(size):
+            for b in range(size):
+                if (x + a) in range(self.shape[0]) \
+                        and (y + b) in  range(self.shape[1]) \
+                        and (a - size / 2) ** 2 + (
+                        b - size / 2) ** 2 <= size:
+                    for rgb in range(3):
+                        self.image[x + a, y + b, rgb] = self.image[x + a, y + b, rgb] * 0.75 + color[rgb] * 0.25'''
+
+    def apply_circles(self, circles: list):
+        for c in circles:
+            self.add_circle(c)
+
+# from STACKOVERFLOW
+@jit
+def get_image_difference(image_1, image_2):
+    gray_1 = cv2.cvtColor(image_1.astype('uint8'), cv2.COLOR_BGR2GRAY)
+    gray_2 = cv2.cvtColor(image_2.astype('uint8'), cv2.COLOR_BGR2GRAY)
+    first_image_hist = cv2.calcHist([gray_1.astype('uint8')], [0], None, [256], [0, 255])
+    second_image_hist = cv2.calcHist([gray_2.astype('uint8')], [0], None, [256], [0, 255])
+
+    img_hist_diff = cv2.compareHist(first_image_hist, second_image_hist, cv2.HISTCMP_BHATTACHARYYA)
+    img_template_probability_match = cv2.matchTemplate(first_image_hist, second_image_hist, cv2.TM_CCOEFF_NORMED)[0][0]
+    img_template_diff = 1 - img_template_probability_match
+
+    # taking only 10% of histogram diff, since it's less accurate than template method
+    commutative_image_diff = img_template_diff
+    return commutative_image_diff
+
+
+@jit
+def crossover(parents):
+    choices = len(parents)
+    p1 = random.randint(0, choices - 1)
+    p2 = random.randint(0, choices - 1)
+    circles = []
+    # Crossover part
+    '''for i in range(min(len(parents[p1].circles),len(parents[p2].circles))):
+        source = (parents[p1],parents[p2])[random.randint(0,1)]
+        circles.append(source.circles[i])'''
+    # print('Crossing 2 parents')
+    cut = random.randint(2, min(len(parents[p1].circles), len(parents[p2].circles)))
+    circles += parents[p1].circles[:cut]
+    circles += parents[p2].circles[cut + 1:]
+    res = Individual(circles, parents[0].shape)
+
+    # Mutation part
+    # print('Random mutation')
+    mutation_rate = 0.8
+    mutation = random.uniform(0, 1)
+    if mutation <= mutation_rate:
+        x, y, color, size = random_square(res.shape)
+        res.add_circle([x, y, color, size])
+    return res
+
+
+@jit
+def fitness_function_gray(ref, img):
+    res = 0
+    image_shape = img.shape
+    for x in range(image_shape[0]):
+        for y in range(image_shape[1]):
+            res += abs(img[x, y] - ref[x, y])
+    return res / (image_shape[0] * image_shape[1])
+
+@jit
+def fitness_function2(image, ref):
+    # print(image.shape)
+    image_gray = cv2.cvtColor(image.astype('uint8'), cv2.COLOR_BGR2GRAY)
+    ref_gray = cv2.cvtColor(ref.astype('uint8'), cv2.COLOR_BGR2GRAY)
+
+    laplacian = np.array((
+        [0, 1, 0],
+        [1, -4, 1],
+        [0, 1, 0]), dtype="int")
+
+    ref_convolved = cv2.filter2D(ref_gray, -1, laplacian)
+    image_convolved = cv2.filter2D(image_gray, -1, laplacian)
+    # show_image(image_convolved)
+    # print(image_convolved.shape)
+    picture1_norm = image_convolved / np.sqrt(np.sum(image_convolved ** 2))
+    picture2_norm = ref_convolved / np.sqrt(np.sum(ref_convolved ** 2))
+    return fitness_function_gray(image_convolved, ref_convolved) + 100 * (1 - np.sum(picture2_norm * picture1_norm))
